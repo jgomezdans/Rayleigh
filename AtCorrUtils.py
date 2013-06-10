@@ -4,6 +4,8 @@ This file contains a number of support functions to perform
 Atmospheric correction over inland waters. They will be used
 by a number of different atmospheric correction algorithms.
 """
+import sys
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -57,10 +59,11 @@ def get_lambdai(fname):
 def get_doy(fname):
     """Finds the day of the year (doy) from Landsat filename
     """
-
-    a=fname.split("_")
-    b=a[0]
-    doy=b[13:16]
+    fname = os.path.basename ( fname )
+    try:
+        doy = int ( fname[13:16] )
+    except:
+        print "Problem with elucidating DoY from filename!"
     return doy
 
 def get_date(doy,year):
