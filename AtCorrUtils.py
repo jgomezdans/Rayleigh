@@ -1,5 +1,9 @@
 #!/usr/bin/env python
-
+"""
+This file contains a number of support functions to perform
+Atmospheric correction over inland waters. They will be used
+by a number of different atmospheric correction algorithms.
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 
