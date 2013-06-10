@@ -48,19 +48,11 @@ def get_lambdai(fname):
     in nanometers
     """
 
-    a=fname.split("_")
-    b=a[1]
-    band=int(b[1])
-            
     if "LE" in fname:
-        wavelengthETM={1:482.5,2:565,3:660,4:837.5,5:1650,6:11450,7:2220}
-        wavelength=wavelengthETM[band]
+        return np.array ( [ 482.5, 565, 660., 837.5, 1650, 11450, 2220 ] )
     if "LT" in fname:
-        wavelengthTM={1:485,2:560,3:660,4:830.5,5:1650,6:11450,7:2215}
-        wavelength=wavelengthTM[band]
+        return np.array ( [ 485.2, 560, 660, 830., 1650, 11450., 2215 ] )
             
-    return wavelength
-
 
 def get_doy(fname):
     """Finds the day of the year (doy) from Landsat filename
