@@ -7,6 +7,7 @@ dramatically over turbid waters. Uses a lot of functions from `AtCorrUtils.py`
 import numpy as np
 import matplotlib.pyplot as plt
 
+from AtCorrUtils import *
 
 def parse_command_line ( ):
     """Parse command line arguments"""
@@ -14,17 +15,27 @@ def parse_command_line ( ):
     
     parser = argparse.ArgumentParser( description='Inverting DALEC with' + \
         ' MCMC.\n By J Gomez-Dans, NCEO/UCL')
-    parser.add_argument ('-a','--autoregressive', action="store_true", \
-            default=False, help="Use an OU likelihood formalism" )
-    parser.add_argument('-i','--init_file', action="store", help='Init file', \
-            required=True)
-    parser.add_argument('-n','--num_years', help='How many years to invert', \
-            required=True, type=int, action="store" )
-    parser.add_argument ('-t','--truncate', action="store_true", \
-            default=False, help="Truncate prior")
+    parser.add_argument ( '-f', '--fname', action="store", required=True, \
+            help="Input MTL filename" )
+    parser.add_argument ( '-H', '--height', action="store", required=True, \
+            help="Input height above seal level [km]" )
+
     args = vars(parser.parse_args())
-    return ( args['autoregressive'], args['init_file'], args['num_years'], \
-            args['truncate'] )
+    return ( args['fname'], float(args['height']) )
 
 if __name__ == "__main__":
-    
+    # Parse the command line to get the MTL file
+    fname, height = parse_command_line ()
+    # Get acquisition geometry
+    theta_i, phi_i = get_angles ( fname )
+    # Get wavebands
+    lambdas = get_lambdai ( fname )
+    # Get time 
+    doy, year = get_doy( fname )
+    # Get O3 concentration
+    o3_conc = get_o3conc ( doy, year )
+    L_rayleigh = []
+    for lambdai in lambdas:
+        L_rayleigh.append ( rayleigh_scattering ( theta_i, 0.0, phi_i, 0.0, lambdai, o3_conc, height, doy ) )
+    L_rayleigh = np.array ( L_rayleigh )
+    print L_rayleigh

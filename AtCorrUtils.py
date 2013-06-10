@@ -61,10 +61,12 @@ def get_doy(fname):
     """
     fname = os.path.basename ( fname )
     try:
+        print fname
         doy = int ( fname[13:16] )
+        year = int ( fname[9:13] )
     except:
         print "Problem with elucidating DoY from filename!"
-    return doy
+    return doy, year
 
 def get_date(doy,year):
     """ Getting date from doy format"""
@@ -76,7 +78,7 @@ def solar_distance ( doy ):
     """Calculates the solar distance as a function of
     day of year (DoY). Code taken from 6S, subroutine
     VARSOL"""
-    assert ( doy > 0 ) & ( doy < 367 )
+    #assert ( doy > 0 ) & ( doy < 367 )
     om = (0.9856*( doy -4))*np.pi/180.
     dsol = 1. / ( (1.-.01673*np.cos(om))**2)
     return dsol
@@ -127,7 +129,11 @@ def ozone ( lambdai, theta_0, theta, o3_column ):
     # Calculate mu terms...
     mu = 1./np.cos ( np.deg2rad(theta) )
     mu_0 = 1./np.cos ( np.deg2rad( theta_0 ) )
-    tau_O3 = data[data[:,0]==lambdai, 1] * o3_column
+    iloc = int( np.ceil ( lambdai - o3_coeff[:,0].min()) )
+    if lambdai >= 974:
+        tau_O3 = 0.0
+    else:
+        tau_O3 = o3_coeff[ iloc, 1] * o3_column
     T_O3 = np.exp ( tau_O3*(1./mu + 1./np.cos(mu_0) ) )
     return T_O3
 
@@ -146,7 +152,7 @@ def rayleigh_optical_depth ( lambdai, h0 ):
     lambdai: wavelength ***in microns***
     h0: sensor height in km
     """
-    
+    lambdai = lambdai/1000.
     Hr = np.exp ( -0.1188*h0 - 0.0011*h0*h0 )
     tau_r = Hr*( 0.00859*(1/(lambdai**4))*(1+0.0113*(1/(lambdai**2)) + 0.00013*(1/(lambdai**4))))
     return tau_r
@@ -159,8 +165,8 @@ def rayleigh_phase_functions ( theta_0, theta, phi_0, phi ):
     phi = np.deg2rad ( phi )
     mu = np.cos ( theta )
     mu_0 = np.cos ( theta_0 )
-    cos_gamma_down = np.cos ( theta_0 )*np.cos(theta) - np.sin(theta_0)*np.sin(theta)*np.cos(phi-pi_0)
-    cos_gamma_up = - np.cos ( theta_0 )*np.cos(theta) - np.sin(theta_0)*np.sin(theta)*np.cos(phi-pi_0)
+    cos_gamma_down = np.cos ( theta_0 )*np.cos(theta) - np.sin(theta_0)*np.sin(theta)*np.cos(phi-phi_0)
+    cos_gamma_up = - np.cos ( theta_0 )*np.cos(theta) - np.sin(theta_0)*np.sin(theta)*np.cos(phi-phi_0)
     
     P_gamma_down = (3./4.)*(1 + cos_gamma_down*cos_gamma_down )
     P_gamma_up = (3./4.) * (1 + (2*mu*mu_0 + cos_gamma_up)**2 )
@@ -169,18 +175,20 @@ def rayleigh_phase_functions ( theta_0, theta, phi_0, phi ):
 
 def fresnel_reflectance ( theta, theta_0, m=1.396 ):
     mu = np.cos ( np.deg2rad ( theta ) )
-    mu_0 = np.cos ( np.deg2rad ( theta_0 ) )
+    mu0 = np.cos ( np.deg2rad ( theta_0 ) )
     
     y = (1./m)*np.sqrt ( m*m + mu*mu - 1 )
     y0 = (1./m)*np.sqrt ( m*m + mu0*mu0 - 1 )
-    rho_mu = 1. - 2.*mu*y*m*( 1./(mu + m*y)**2 + 1./(m*mu*y)**2)
-    rho_mu0 = 1. - 2.*mu0*y0*m*( 1./(mu0 + m*y0)**2 + 1./(m*mu0*y0)**2)
+    rho_mu = 1. - 2.*mu*y*m*( 1./(mu + m*y)**2 + 1./(m*mu + y)**2)
+    rho_mu0 = 1. - 2.*mu0*y0*m*( 1./(mu0 + m*y0)**2 + 1./(m*mu0 + y0)**2)
     return rho_mu, rho_mu0
 
 def rayleigh_scattering ( theta, theta_0, phi, phi_0, lambdai, o3_conc, h0, doy ):
     # Calculate the terms in Eq. 2 of Wang et al
     # First, the relevant ETr... Note this is not implemented
     F0 = extraterrestrial_radiation ( doy, lambdai )
+    import pdb
+    pdb.set_trace()
     # Ozone transmittance
     T_O3 = ozone ( lambdai, theta_0, theta, o3_conc )
     # Rayleigh optical depth
