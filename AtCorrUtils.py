@@ -7,6 +7,20 @@ by a number of different atmospheric correction algorithms.
 import numpy as np
 import matplotlib.pyplot as plt
 
+def get_o3conc ( doy, year ):
+    """Get O3 concentration for a given year and DoY for the region of interest. If you need
+    other areas, you will need to provide a new file for this!!!!
+    """
+    if  ( year < 1980 ) or ( year > 2012 ):
+        print "Only years between 1980 are considered with current data file"
+        raise ValueError
+    d = np.loadtxt( "o3_conc.txt" )
+    missing_dates = d[ d[:,1] == 0, 0 ] # Missing dates in format YYYYDDD
+    present_dates = d[ d[:,1] != 0, 0 ]
+    present_meas = d[ d[:, 1] != 0, 1 ] # the actual measurements
+    target_period = float ( "%4d%03d" % ( year, doy ) )
+    o3_conc_for_today = np.interp ( target_period, present_dates, present_meas )
+    return o3_conc_for_today
 
 def get_angles ( fname ):
     import glob
