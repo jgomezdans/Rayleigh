@@ -134,7 +134,7 @@ def ozone ( lambdai, theta_0, theta, o3_column ):
         tau_O3 = 0.0
     else:
         tau_O3 = o3_coeff[ iloc, 1] * o3_column
-    T_O3 = np.exp ( tau_O3*(1./mu + 1./np.cos(mu_0) ) )
+    T_O3 = np.exp ( -tau_O3*(1./mu + 1./mu_0 ))
     return T_O3
 
 def rayleigh_optical_depth ( lambdai, h0 ):
@@ -186,12 +186,13 @@ def fresnel_reflectance ( theta, theta_0, m=1.396 ):
 def rayleigh_scattering ( theta, theta_0, phi, phi_0, lambdai, o3_conc, h0, doy ):
     # Calculate the terms in Eq. 2 of Wang et al
     # First, the relevant ETr... Note this is not implemented
-    F0 = extraterrestrial_radiation ( doy, lambdai )
+    F0 = extraterrestrial_radiation ( lambdai, doy)
     
     # Ozone transmittance
     T_O3 = ozone ( lambdai, theta_0, theta, o3_conc )
     # Rayleigh optical depth
     tau_rayleigh = rayleigh_optical_depth ( lambdai, h0 )
+    
     # The Rayleigh up and down phase functions
     P_gamma_down, P_gamma_up = rayleigh_phase_functions ( theta_0, theta, phi_0, phi )
     # Fresnel terms

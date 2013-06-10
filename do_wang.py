@@ -35,7 +35,12 @@ if __name__ == "__main__":
     # Get O3 concentration
     o3_conc = get_o3conc ( doy, year )
     L_rayleigh = []
+    tau_diff = []
     for lambdai in lambdas:
-        L_rayleigh.append ( rayleigh_scattering ( theta_i, 0.0, phi_i, 0.0, lambdai, o3_conc, height, doy ) )
+        lray, tau_diffu = rayleigh_scattering ( theta_i, 0.0, phi_i, 0.0, lambdai, o3_conc, height, doy )
+        L_rayleigh.append ( lray )
+        tau_diff.append ( tau_diffu )
     L_rayleigh = np.array ( L_rayleigh )
+    tau_diff = np.array ( tau_diff )
     print L_rayleigh
+    print tau_diff
