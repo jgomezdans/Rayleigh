@@ -7,14 +7,70 @@ by a number of different atmospheric correction algorithms.
 import numpy as np
 import matplotlib.pyplot as plt
 
+
+def get_angles ( fname ):
+    import glob
+    import os
+    import math
+    """A function to extract the relevant metadata from the
+    USGS control file. Returns Solar angles (azimuth and elevation(Zenithal))"""
+        
+    fp = open( fname, 'r') 
+    
+    for line in fp: 
+    
+        if ( line.find ("SUN_ELEVATION") >= 0 ):
+            s = line.split("=") 
+            theta_0 = float(s[1]) 
+        
+        elif ( line.find ("SUN_AZIMUTH") >= 0 ):
+            s = line.split("=") 
+            phi_0 = float(s[1])
+    solar_angles=(theta_0,phi_0)
+    return solar_angles
+
+def get_lambdai(fname):
+    """This function takes a the number of the band  and returns the mean wavelength value
+    in nanometers
+    """
+
+    a=fname.split("_")
+    b=a[1]
+    band=int(b[1])
+            
+    if "LE" in fname:
+        wavelengthETM={1:482.5,2:565,3:660,4:837.5,5:1650,6:11450,7:2220}
+        wavelength=wavelengthETM[band]
+    if "LT" in fname:
+        wavelengthTM={1:485,2:560,3:660,4:830.5,5:1650,6:11450,7:2215}
+        wavelength=wavelengthTM[band]
+            
+    return wavelength
+
+
+def get_doy(fname):
+    """Finds the day of the year (doy) from Landsat filename
+    """
+
+    a=fname.split("_")
+    b=a[0]
+    doy=b[13:16]
+    return doy
+
+def get_date(doy,year):
+    """ Getting date from doy format"""
+    import datetime
+    return datetime.datetime(year, 1, 1) + datetime.timedelta(doy - 1)
+
+
 def solar_distance ( doy ):
-  """Calculates the solar distance as a function of
-  day of year (DoY). Code taken from 6S, subroutine
-  VARSOL"""
-  assert ( doy > 0 ) & ( doy < 367 )
-  om = (0.9856*( doy -4))*np.pi/180.
-  dsol = 1. / ( (1.-.01673*np.cos(om))**2)
-  return dsol
+    """Calculates the solar distance as a function of
+    day of year (DoY). Code taken from 6S, subroutine
+    VARSOL"""
+    assert ( doy > 0 ) & ( doy < 367 )
+    om = (0.9856*( doy -4))*np.pi/180.
+    dsol = 1. / ( (1.-.01673*np.cos(om))**2)
+    return dsol
 
 def extraterrestrial_radiation( wvl, doy ):
     """Need a function to calculate **spectral** extraterrestrial radiation as a function of Earth-Sun
