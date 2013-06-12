@@ -36,11 +36,12 @@ if __name__ == "__main__":
     o3_conc = get_o3conc ( doy, year )
     L_rayleigh = []
     tau_diff = []
+    # Rayleigh scattering and O3 pissing 
     for lambdai in lambdas:
         lray, tau_diffu = rayleigh_scattering ( theta_i, 0.0, phi_i, 0.0, lambdai, o3_conc, height, doy )
         L_rayleigh.append ( lray )
         tau_diff.append ( tau_diffu )
     L_rayleigh = np.array ( L_rayleigh )
     tau_diff = np.array ( tau_diff )
-    print L_rayleigh
-    print tau_diff
+    # Aerosol stuff starts here...
+    water_leaving_radiance = water_leaving_rad_b7 ( tau_diff[-1], fname, L_rayleigh[-1] )

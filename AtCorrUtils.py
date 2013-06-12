@@ -7,16 +7,30 @@ by a number of different atmospheric correction algorithms.
 import sys
 import os
 import numpy as np
+from osgeo import gdal
 import matplotlib.pyplot as plt
 
-def get_o3conc ( doy, year ):
-    """Get O3 concentration for a given year and DoY for the region of interest. If you need
-    other areas, you will need to provide a new file for this!!!!
+def get_o3conc ( doy, year, fname="o3_conc.txt" ):
+    """Get O3 concentration for a given year and DoY for the region of interest. 
+    
+    If you need other areas, you will need to provide a new file for this!!!! We 
+    use a very simple linear interpolator of the time series given in the file. File
+    format is two columns: date and concentration in dobson units (???TODO check!).
+    Time format is YYYYDDD.
+    
+    Parameters
+    ----------
+    doy: int
+        The Day of Year
+    year: int
+        The year (tested between 1980 and 2012, but might change that if needed)
+    fname: str, optional
+        The filename with the timeseries data.
     """
     if  ( year < 1980 ) or ( year > 2012 ):
         print "Only years between 1980 are considered with current data file"
         raise ValueError
-    d = np.loadtxt( "o3_conc.txt" )
+    d = np.loadtxt( fname )
     missing_dates = d[ d[:,1] == 0, 0 ] # Missing dates in format YYYYDDD
     present_dates = d[ d[:,1] != 0, 0 ]
     present_meas = d[ d[:, 1] != 0, 1 ] # the actual measurements
@@ -25,12 +39,16 @@ def get_o3conc ( doy, year ):
     return o3_conc_for_today
 
 def get_angles ( fname ):
-    import glob
-    import os
-    import math
-    """A function to extract the relevant metadata from the
-    USGS control file. Returns Solar angles (azimuth and elevation(Zenithal))"""
-        
+    """Extract acquisition geometry from MLT file
+    
+    Parameters
+    ----------
+    fname: str
+        A filename
+    """
+    if fname.find ( "MTL.txt" ) < 0:
+        print "Filename doesn't have 'MTL.txt'. Are you sure this is the right file?"
+        raise IOerror
     fp = open( fname, 'r') 
     
     for line in fp: 
@@ -46,8 +64,12 @@ def get_angles ( fname ):
     return solar_angles
 
 def get_lambdai(fname):
-    """This function takes a the number of the band  and returns the mean wavelength value
-    in nanometers
+    """Returns the mean wavelength value in nanometers.
+    
+    Parameters
+    ----------
+    fname: str
+        The metadata filename. Assumes USGS convention
     """
 
     if "LE" in fname:
@@ -58,6 +80,12 @@ def get_lambdai(fname):
 
 def get_doy(fname):
     """Finds the day of the year (doy) from Landsat filename
+    
+    Parameters
+    ----------
+    fname: str
+        The metadata filename. Assumes USGS convention
+
     """
     fname = os.path.basename ( fname )
     try:
@@ -75,9 +103,15 @@ def get_date(doy,year):
 
 
 def solar_distance ( doy ):
-    """Calculates the solar distance as a function of
-    day of year (DoY). Code taken from 6S, subroutine
-    VARSOL"""
+    """Calculates the solar distance as a function of day of year (DoY).
+    
+    Code taken from 6S, subroutine `VARSOL`
+    
+    Parameters
+    ----------
+    doy: int 
+        Day of year
+    """
     #assert ( doy > 0 ) & ( doy < 367 )
     om = (0.9856*( doy -4))*np.pi/180.
     dsol = 1. / ( (1.-.01673*np.cos(om))**2)
@@ -158,7 +192,7 @@ def rayleigh_optical_depth ( lambdai, h0 ):
     return tau_r
 
 def rayleigh_phase_functions ( theta_0, theta, phi_0, phi ):
-    """Wather phase functions require the acquisition geometry in degrees"""
+    """Water phase functions require the acquisition geometry in degrees"""
     theta_0 = np.deg2rad ( theta_0 )
     theta = np.deg2rad ( theta )
     phi_0 = np.deg2rad ( phi_0 )
@@ -205,3 +239,117 @@ def rayleigh_scattering ( theta, theta_0, phi, phi_0, lambdai, o3_conc, h0, doy 
     diffuse = np.exp ( - ( (rayleigh_radiance/2.) + T_O3 )*mu )
             
     return rayleigh_radiance, diffuse
+
+def water_leaving_rad_b7 ( diff_coeff, fname, rayleigh_radiance ):
+    """Implements equations 9 and 10 of Wang and su puta madre.
+    
+    """
+    fname = fname.replace ( "MTL.txt", "B7_TOARAD.tif" )
+    g = gdal.Open ( fname )
+    total_rad = g.ReadAsArray()
+    water_leaving_rad = ( total_rad - rayleigh_radiance )/diff_coeff
+    return water_leaving_rad
+
+def nearest_neighbour_interpolation ( clear_water, green_aot ):
+    """Nearest neighbour interpolation of green AOT for turbid water pixels.
+    
+    `clear_water` is a 2D array with values 2 for turbid water pixels and
+    1 for clear water pixels. The aim is to interpolate the values of
+    `green_aot` where `clear_water` is 1 for the locations where `clear_water` 
+    is 2. This is a quick'n'ready nearest neighbour interpolator, which suffers
+    from not being very efficient when many pixels have to be interpolated.
+    
+    Parameters
+    ----------
+    clear_water: array
+        A 2D array with 1 indicating clear water pixels and 2 indicating turbid water pixels
+    green_aot: array
+        A 2D array that stores the AOT in the green for clear water pixels
+        
+    Returns:
+    green_aot_intp: array
+        A 2D array with the aerosol scattering contribution for both turbid and non-turbid pixels
+    """
+
+    yc, xc = np.nonzero ( clear_water == 2 )
+    y, x = np.nonzero ( clear_water == 1 )
+    
+    v = [ np.hypot ( x - xc[i], y - yc[i]).argmin() for i in xrange(len(xc))]
+    v = np.array ( v )
+    green_aot_intp = green_aot*1.
+    green_aot_intp [yc, xc] = green_aot [y[v], x[v]]
+    return green_aot_intp
+
+def aerosol_correction ( tau_diff, fname, l_rayleigh, doy, lambdas, theta_i ):
+    """Aerosol correction from Wang et al. (2007).
+    
+    The following function implements the aerosol correctin described in Wang
+    et al. (2007).The procedure is as follows:
+    
+    1. Use band 7 to find "clear water pixels" using a threshold
+    2. Using the green band, and assuming that water leaving radiance is 
+       fairly constant for clear water pixels, estimate the AOD at the green
+       for these pixels.
+    3. Interpolate green AOD for other non-clear water pixels
+    4. Extrapolate the green AOD to the other visible bands, and solve for 
+       water leaving radiance
+    5. Additionally, convert to reflectance?
+    
+    Parameters
+    ----------
+    tau_diff: array
+        The diffuse transmittance of the atmosphere for all TM bands
+    fname: str
+        A metadata (_MTL.txt) filename. 
+    l_rayleigh: array
+        Rayleigh radiance for all TM bands
+    doy: int
+        Day of year
+    lambdas: array
+        Centre frequencies of all TM bands
+    theta_i: float
+        The solar zenith angle (in degrees?)
+        
+    Returns
+    --------
+    water_leaving_rad_vis: array
+        Water leaving radiance for bands 1, 2, 3 (B, G, R)
+     
+    NOTE: filenames follow a convention!!!!
+    """
+    water_leaving_rad = water_leaving_rad_b7 ( tau_diff[-1], fname, l_rayleigh[-1] )
+    clear_water = np.where ( np.logical_and ( water_leaving_rad >= -0.05, \
+        water_leaving_rad <= 0.2), 1, 0 ) 
+    clear_water =  np.where ( np.logical_and ( water_leaving_rad > 0.2, \
+        water_leaving_rad <= 0.9), 2, clear_water )
+    clear_water =  np.where ( np.abs( water_leaving_rad )> 0.9, 0, clear_water )
+    
+    et_rad = extraterrestrial_radiation( doy, lambdas[1] )
+    distance = solar_distance ( doy )
+    green_refl = 0.054 
+
+    for i in xrange ( 3 ):
+        fname = fname.replace ( "MTL.txt", "B%d_TOARAD.tif" % ( i+1 ) )
+        g = gdal.Open ( fname )
+        if i == 0:
+            total_rad = np.zeros ( ( 3, g.RasterXSize, g.RasterYSize ) )
+        if i == 1:
+            green_rad_toa = g.ReadAsArray()
+        total_rad[i, :, : ] = g.ReadAsArray()
+            
+    
+    green_rad = green_refl*np.cos(theta_i)*et_rad/(np.pi*distance)
+    aerosol_corr = green_rad_toa*0.
+    aerosol_corr[clear_water==1] = green_rad_toa[clear_water==1] - \
+        tau_diff[1]*green_rad - l_rayleigh[1]
+    aerosol_corr = nearest_neighbour_interpolation ( clear_water, aerosol_corr )
+    s_factor = np.zeros(3)
+    s_factor = np.array ( [ extraterrestrial_radiation( doy, lambdas[i] )/et_rad \
+        for i in xrange(3) ] )
+    water_leaving_rad_vis = np.zeros( ( 3, green_rad_toa.shape[0], green_rad_toa.shape[1] ) )
+    for i in xrange(3):
+        water_leaving_rad_vis[ i, :, : ] = ( total_rad[i,:,:] - l_rayleigh[i] - \
+            aerosol_corr*s_factor[i] )/tau_diff[i]
+    
+    
+    return water_leaving_rad_vis    
