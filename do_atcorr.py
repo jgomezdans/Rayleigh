@@ -334,7 +334,8 @@ def do_wang_atcorr ( fname, height, o3_conc, verbose=False ):
     tau_diff = np.array ( tau_diff )
     # Aerosol stuff starts here...
     water_leaving_radiance = water_leaving_rad_b7 ( tau_diff[-1], fname, L_rayleigh[-1] )
-    water_leaving_radiance_vis = aerosol_correction ( tau_diff, fname, L_rayleigh, doy, lambdas, theta_i )
+    water_leaving_radiance_vis = aerosol_correction ( tau_diff, fname, L_rayleigh, doy, \
+        lambdas, theta_i, verbose=verbose )
     output_fname = fname.replace("MTL.txt", "_VIS_WLRAD.tif" )
     if verbose:
         print "Creating output %s" % output_fname
