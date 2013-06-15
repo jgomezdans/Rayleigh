@@ -75,6 +75,8 @@ except ImportError:
     sys.exit ( -1 )
     
     
+from AtCorrUtils import *
+        
 GDAL_OPTS = ["COMPRESS=LZW", "INTERLEAVE=PIXEL", "TILED=YES",\
         "SPARSE_OK=TRUE", "BIGTIFF=YES" ]
 
@@ -299,6 +301,59 @@ def subset_datasets ( metadata_file, cutline ):
             raise IOError
         dn_fnames.append ( new_fname )
     return dn_fnames
+def do_wang_atcorr ( fname, height, o3_conc, verbose=False ):
+    
+    
+    # Get acquisition geometry
+    theta_i, phi_i = get_angles ( fname )
+    if verbose:
+        print "\tTheta_i=%f, Phi_i=%f" % ( theta_i, phi_i )
+    # Get wavebands
+    lambdas = get_lambdai ( fname )
+    if verbose:
+        print "Lambdas: ", lambdas
+    # Get time 
+    doy, year = get_doy( fname )
+    if verbose:
+        print "Doy: %d, Year: %d" % ( doy, year )
+    # Get O3 concentration
+    if o3_conc is None:
+        o3_conc = get_o3conc ( doy, year )
+        if verbose:
+            print "Using default O3 conc file, O3 conc: %f" % o3_conc
+                        
+        
+    L_rayleigh = []
+    tau_diff = []
+    # Rayleigh scattering and O3 pissing 
+    for lambdai in lambdas:
+        lray, tau_diffu = rayleigh_scattering ( theta_i, 0.0, phi_i, 0.0, lambdai, o3_conc, height, doy )
+        L_rayleigh.append ( lray )
+        tau_diff.append ( tau_diffu )
+    L_rayleigh = np.array ( L_rayleigh )
+    tau_diff = np.array ( tau_diff )
+    # Aerosol stuff starts here...
+    water_leaving_radiance = water_leaving_rad_b7 ( tau_diff[-1], fname, L_rayleigh[-1] )
+    water_leaving_radiance_vis = aerosol_correction ( tau_diff, fname, L_rayleigh, doy, lambdas, theta_i )
+    output_fname = fname.replace("MTL.txt", "_VIS_WLRAD.tif" )
+    if verbose:
+        print "Creating output %s" % output_fname
+    afname = fname.replace ( "MTL.txt", "B1_TOARAD.tif" )
+    if not os.path.exists ( afname ):
+        afname = fname.replace ( "MTL.txt", "ROI_B1_TOARAD.tif"  )
+    g = gdal.Open ( afname )
+    if g is None:
+        raise IOError, "Can't find file %s" % fname
+
+    # Create output dataset if `first_time` is true
+    drv = gdal.GetDriverByName ( "GTiff" )
+    dst_ds = drv.Create ( output_fname, g.RasterXSize, \
+                g.RasterYSize, 3, gdal.GDT_Float32, options=GDAL_OPTS )
+    dst_ds.SetGeoTransform ( g.GetGeoTransform() )
+    dst_ds.SetProjection ( g.GetProjectionRef() )
+    for band in xrange(3):
+        dst_ds.GetRasterBand(band+1).WriteArray ( water_leaving_radiance_vis[band, :, :] )
+    dst_ds = None
 
 if __name__ == '__main__':
 
@@ -323,6 +378,8 @@ if __name__ == '__main__':
         main ( subsets = the_fnames )
     else:
         main()
+    do_wang_atcorr ( options.input_f, options.height, options.o3_conc, \
+        verbose = options.verbose )
     if options.verbose: print time.asctime()
     if options.verbose: print 'TOTAL TIME IN MINUTES:',
     if options.verbose: print (time.time() - start_time) / 60.0

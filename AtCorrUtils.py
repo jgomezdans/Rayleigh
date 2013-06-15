@@ -48,7 +48,7 @@ def get_angles ( fname ):
     """
     if fname.find ( "MTL.txt" ) < 0:
         print "Filename doesn't have 'MTL.txt'. Are you sure this is the right file?"
-        raise IOerror
+        raise IOError
     fp = open( fname, 'r') 
     
     for line in fp: 
@@ -240,12 +240,17 @@ def rayleigh_scattering ( theta, theta_0, phi, phi_0, lambdai, o3_conc, h0, doy 
             
     return rayleigh_radiance, diffuse
 
-def water_leaving_rad_b7 ( diff_coeff, fname, rayleigh_radiance ):
+def water_leaving_rad_b7 ( diff_coeff, ifname, rayleigh_radiance ):
     """Implements equations 9 and 10 of Wang and su puta madre.
     
     """
-    fname = fname.replace ( "MTL.txt", "B7_TOARAD.tif" )
+    fname = ifname.replace ( "MTL.txt", "B7_TOARAD.tif" )
+    if not os.path.exists ( fname ):
+        fname = ifname.replace ( "MTL.txt", "ROI_B7_TOARAD.tif" )
+                
     g = gdal.Open ( fname )
+    if g is None:
+        raise IOError, "Can't find file %s!" % fname
     total_rad = g.ReadAsArray()
     water_leaving_rad = ( total_rad - rayleigh_radiance )/diff_coeff
     return water_leaving_rad
@@ -280,7 +285,7 @@ def nearest_neighbour_interpolation ( clear_water, green_aot ):
     green_aot_intp [yc, xc] = green_aot [y[v], x[v]]
     return green_aot_intp
 
-def aerosol_correction ( tau_diff, fname, l_rayleigh, doy, lambdas, theta_i ):
+def aerosol_correction ( tau_diff, fname, l_rayleigh, doy, lambdas, theta_i, verbose ):
     """Aerosol correction from Wang et al. (2007).
     
     The following function implements the aerosol correctin described in Wang
@@ -329,10 +334,15 @@ def aerosol_correction ( tau_diff, fname, l_rayleigh, doy, lambdas, theta_i ):
     green_refl = 0.054 
 
     for i in xrange ( 3 ):
-        fname = fname.replace ( "MTL.txt", "B%d_TOARAD.tif" % ( i+1 ) )
-        g = gdal.Open ( fname )
+        
+        afname = fname.replace ( "MTL.txt", "B%d_TOARAD.tif" % ( i+1 ) )
+        if not os.path.exists ( afname ):
+            afname = fname.replace ( "MTL.txt", "ROI_B%d_TOARAD.tif" % ( i+1 ) )
+        g = gdal.Open ( afname )
+        if g is None:
+            raise IOError, "Can't find file %s" % fname
         if i == 0:
-            total_rad = np.zeros ( ( 3, g.RasterXSize, g.RasterYSize ) )
+            total_rad = np.zeros ( ( 3, g.RasterYSize, g.RasterXSize ) )
         if i == 1:
             green_rad_toa = g.ReadAsArray()
         total_rad[i, :, : ] = g.ReadAsArray()
@@ -342,7 +352,11 @@ def aerosol_correction ( tau_diff, fname, l_rayleigh, doy, lambdas, theta_i ):
     aerosol_corr = green_rad_toa*0.
     aerosol_corr[clear_water==1] = green_rad_toa[clear_water==1] - \
         tau_diff[1]*green_rad - l_rayleigh[1]
+    if verbose:
+        print "Starting interpolation..."
     aerosol_corr = nearest_neighbour_interpolation ( clear_water, aerosol_corr )
+    if verbose:
+        print "Interpolation done..."
     s_factor = np.zeros(3)
     s_factor = np.array ( [ extraterrestrial_radiation( doy, lambdas[i] )/et_rad \
         for i in xrange(3) ] )
