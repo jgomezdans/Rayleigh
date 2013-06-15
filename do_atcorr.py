@@ -217,7 +217,10 @@ def convert_to_radiance ( fname, band, gain, bias, lmax, lmin, qc_lmax, qc_lmin,
     if verbose:
         print "Start reading %s" % fname
     # The output filaname.
-    output_fname = fname.replace(".TIF", "_TOARAD.tif" )
+    if fname.find ( ".TIF" ) >= 0:
+        output_fname = fname.replace(".TIF", "_TOARAD.tif" )
+    elif fname.find (".vrt" ) >= 0:
+        output_fname = fname.replace(".vrt", "_TOARAD.tif" )
     for ( ds_config, this_X, this_Y, nx_valid, ny_valid, data_in ) in \
         extract_chunk ( fname ):
         if first_time:
@@ -252,7 +255,7 @@ def convert_to_radiance ( fname, band, gain, bias, lmax, lmin, qc_lmax, qc_lmin,
     # Need to do this to flush the dataset to disk
     dst_ds = None
     
-def main ():
+def main ( subsets = None ):
     """The main function""" 
   
 
@@ -264,13 +267,38 @@ def main ():
     original_fname = os.path.basename ( options.input_f)
     prefix = original_fname.split("_")[0] 
     fname_prefix = os.path.join ( os.path.dirname ( options.input_f ), prefix )
-    for the_band in [1,2,3,4,5,7]:
-        input_file = fname_prefix + "_B%d.TIF" % the_band
+    for (i, the_band) in enumerate ( [1,2,3,4,5,7] ):
+        if subsets is None:
+            input_file = fname_prefix + "_B%d.TIF" % the_band
+        else:
+            input_file = subsets[i]
         convert_to_radiance ( input_file, the_band, \
                     gain[the_band], bias[the_band], \
                     lmax[the_band], lmin[the_band], qc_lmax[the_band], \
                     qc_lmin[the_band], options.verbose )
     
+def subset_datasets ( metadata_file, cutline ):
+    """Subset origianl datafiles for given ROI
+    
+    This function subsets the original datafiles according to a
+    user-provided ROI in raster coordinates (typical UTM, units m).
+    """
+    import subprocess
+    ulx, uly, lrx, lry = [ float(x) for x in cutline.split(",") ]
+    dn_fnames = []
+    for band in [ 1, 2, 3, 4, 5, 7 ]:
+        print band,
+        new_fname = metadata_file.replace("_MTL.txt", "_ROI_B%d.vrt" % band )
+        input_fname = metadata_file.replace("_MTL.txt", "_B%d.TIF" % band )
+        print new_fname, input_fname
+        retval = subprocess.call ("gdal_translate -of VRT -projwin %f %f %f %f %s %s" % \
+                ( ulx, uly, lrx, lry, input_fname, new_fname ), shell=True )
+        if retval != 0:
+            print "Problem selecting ROI %f %f %f %f in %s" % \
+                ( ulx, uly, lrx, lry, input_fname)
+            raise IOError
+        dn_fnames.append ( new_fname )
+    return dn_fnames
 
 if __name__ == '__main__':
 
@@ -280,11 +308,21 @@ if __name__ == '__main__':
     parser.add_option ('-v', '--verbose', action='store_true', \
             default=False, help='verbose output')
     parser.add_option ('-i', '--input', action='store', dest="input_f",\
-            type=str, help='Input filename')
+            type=str, help='Input USGS metadata filename')
+    parser.add_option ('-O', '--o3', action='store', dest="o3_conc", \
+            type=str, help="O3 concentration" )
+    parser.add_option ('-H', '--height', action="store", dest="height", \
+            type=float, help="Scene height above mean sea level (km)")
+    parser.add_option('-r', '--roi', action="store", dest="cut", \
+            type=str, help="ROI specification (ulx uly lrx lry)" )
         
     (options, args) = parser.parse_args()
     if options.verbose: print time.asctime()
-    main()
+    if options.cut is not None:
+        the_fnames = subset_datasets ( options.input_f, options.cut )
+        main ( subsets = the_fnames )
+    else:
+        main()
     if options.verbose: print time.asctime()
     if options.verbose: print 'TOTAL TIME IN MINUTES:',
     if options.verbose: print (time.time() - start_time) / 60.0
