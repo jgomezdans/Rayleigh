@@ -2,42 +2,70 @@
 """
 SYNOPSIS
 
-    dn_2_rad.py [-h,--help] [-v,--verbose] [-i,--input] [-o,--output]
+    do_wang.py [-h,--help] [-v,--verbose] [-i,--input] [-O,--o3] [-H,--height] [-r,--roi]
     
 
 DESCRIPTION
 
-  This program is used to extract the gain parameters and to convert 
-  Landsat TM "digital numbers" (DNs) to top-of-atmosphere (TOA) radiances.
-  The units of the output are W/(m2*ster*um). We assume that the user
-  provides an input band and that the band names follow the standard USGS
-  naming convention.
+  This program receives a metadata file in USGS format, and it then applies
+  the Wang atmospheric correction method based on a minimimal set of input
+  parameters. It will take the original data, subset it if required using a
+  geographical box in projection units (UTM). It will produce datasets with
+  the TOA radiance (e.g. `LE72040312010347EDC00_ROI_B2_TOARAD.tif`), as well
+  as a datafile with the visible bands with atmospheric correction  (filename
+  is e.g. `LE72040312010347EDC00_WANG_VIS_WLRAD.tif`). 
 
 EXAMPLES
-
-            $ ./dn_2_rad.py --input LE71660672004161ASN01_B1.TIF --verbose
-            Tue Apr 30 14:26:06 2013
-            Start reading LE71660672004161ASN01_B1.TIF
-            Using blocksize 7831 x 1
-            Creating output LE71660672004161ASN01_B1_TOARAD.tif
-            Start reading LE71660672004161ASN01_B2.TIF
-            Using blocksize 7831 x 1
-            Creating output LE71660672004161ASN01_B2_TOARAD.tif
-            Start reading LE71660672004161ASN01_B3.TIF
-            Using blocksize 7831 x 1
-            Creating output LE71660672004161ASN01_B3_TOARAD.tif
-            Start reading LE71660672004161ASN01_B4.TIF
-            Using blocksize 7831 x 1
-            Creating output LE71660672004161ASN01_B4_TOARAD.tif
-            Start reading LE71660672004161ASN01_B5.TIF
-            Using blocksize 7831 x 1
-            Creating output LE71660672004161ASN01_B5_TOARAD.tif
-            Start reading LE71660672004161ASN01_B7.TIF
-            Using blocksize 7831 x 1
-            Creating output LE71660672004161ASN01_B7_TOARAD.tif
-            Tue Apr 30 14:26:31 2013
-            TOTAL TIME IN MINUTES: 0.429338383675
-
+            $ ./do_atcorr.py -H 0.5 -i data/LE72040312010347EDC00_MTL.txt \
+                --roi 578745.000,4650765.000,608535.000,4618935.000 -v
+                
+            Sat Jun 15 15:19:56 2013
+            1 data/LE72040312010347EDC00_ROI_B1.vrt data/LE72040312010347EDC00_B1.TIF
+            Input file size is 8081, 7151
+            Computed -srcwin 3822 2685 993 1061 from projected window.
+            2 data/LE72040312010347EDC00_ROI_B2.vrt data/LE72040312010347EDC00_B2.TIF
+            Input file size is 8081, 7151
+            Computed -srcwin 3822 2685 993 1061 from projected window.
+            3 data/LE72040312010347EDC00_ROI_B3.vrt data/LE72040312010347EDC00_B3.TIF
+            Input file size is 8081, 7151
+            Computed -srcwin 3822 2685 993 1061 from projected window.
+            4 data/LE72040312010347EDC00_ROI_B4.vrt data/LE72040312010347EDC00_B4.TIF
+            Input file size is 8081, 7151
+            Computed -srcwin 3822 2685 993 1061 from projected window.
+            5 data/LE72040312010347EDC00_ROI_B5.vrt data/LE72040312010347EDC00_B5.TIF
+            Input file size is 8081, 7151
+            Computed -srcwin 3822 2685 993 1061 from projected window.
+            7 data/LE72040312010347EDC00_ROI_B7.vrt data/LE72040312010347EDC00_B7.TIF
+            Input file size is 8081, 7151
+            Computed -srcwin 3822 2685 993 1061 from projected window.
+            Start reading data/LE72040312010347EDC00_ROI_B1.vrt
+            Using blocksize 128 x 128
+            Creating output data/LE72040312010347EDC00_ROI_B1_TOARAD.tif
+            Start reading data/LE72040312010347EDC00_ROI_B2.vrt
+            Using blocksize 128 x 128
+            Creating output data/LE72040312010347EDC00_ROI_B2_TOARAD.tif
+            Start reading data/LE72040312010347EDC00_ROI_B3.vrt
+            Using blocksize 128 x 128
+            Creating output data/LE72040312010347EDC00_ROI_B3_TOARAD.tif
+            Start reading data/LE72040312010347EDC00_ROI_B4.vrt
+            Using blocksize 128 x 128
+            Creating output data/LE72040312010347EDC00_ROI_B4_TOARAD.tif
+            Start reading data/LE72040312010347EDC00_ROI_B5.vrt
+            Using blocksize 128 x 128
+            Creating output data/LE72040312010347EDC00_ROI_B5_TOARAD.tif
+            Start reading data/LE72040312010347EDC00_ROI_B7.vrt
+            Using blocksize 128 x 128
+            Creating output data/LE72040312010347EDC00_ROI_B7_TOARAD.tif
+                    Theta_i=22.545988, Phi_i=160.273075
+            Lambdas:  [   482.5    565.     660.     837.5   1650.   11450.    2220. ]
+            LE72040312010347EDC00_MTL.txt
+            Doy: 347, Year: 2010
+            Using default O3 conc file, O3 conc: 265.000000
+            Starting interpolation...
+            Interpolation done...
+            Creating output data/LE72040312010347EDC00_WANG_VIS_WLRAD.tif
+            Sat Jun 15 15:23:22 2013
+            TOTAL TIME IN MINUTES: 3.43263668219
 
 
 EXIT STATUS
@@ -48,12 +76,11 @@ AUTHOR
 
     J Gomez-Dans <j.gomez-dans@ucl.ac.uk>
 
-LICENSE
-
-    This script is in the public domain, free from copyrights or restrictions.
-
+NOTE
+    
+    The program has not been verified. Needs severe testing!!!!!!!!
 """
-# dn_2_rad.py [-h,--help] [-v,--verbose] [-i,--input] [-o,--output]
+
     
 
 
@@ -336,7 +363,7 @@ def do_wang_atcorr ( fname, height, o3_conc, verbose=False ):
     water_leaving_radiance = water_leaving_rad_b7 ( tau_diff[-1], fname, L_rayleigh[-1] )
     water_leaving_radiance_vis = aerosol_correction ( tau_diff, fname, L_rayleigh, doy, \
         lambdas, theta_i, verbose=verbose )
-    output_fname = fname.replace("MTL.txt", "_VIS_WLRAD.tif" )
+    output_fname = fname.replace("MTL.txt", "WANG_VIS_WLRAD.tif" )
     if verbose:
         print "Creating output %s" % output_fname
     afname = fname.replace ( "MTL.txt", "B1_TOARAD.tif" )
